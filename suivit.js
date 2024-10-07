@@ -68,7 +68,6 @@ async function getModuleTitle(moduleName) {
     return 'N/A';
   }
 }
-
 function generateHtmlTable(modulesInfo) {
   let html = `
   <!DOCTYPE html>
@@ -125,37 +124,72 @@ function generateHtmlTable(modulesInfo) {
 
   return html;
 }
-
-async function main() {
-  const composerLock = JSON.parse(fs.readFileSync('prod/composer.lock', 'utf8'));
-  const modules = composerLock.packages.filter(pkg => pkg.name.startsWith('drupal/') && pkg.type === 'drupal-module');
-  const modulesInfo = [];
-
-  for (const module of modules) {
-    const moduleName = extractModuleNameFromHomepage(module.homepage);
-
-    const currentVersion = module.dist?.reference || module.source?.reference || module.version || 'N/A';
-    const recommendedVersion = module.dist?.reference || module.source?.reference || 'N/A';
-    const recommendedReleaseDate = await getReleaseDate(moduleName, recommendedVersion);
-    const { latestVersion, latestReleaseDate } = await getLatestVersionInfo(moduleName);
-    const moduleTitle = await getModuleTitle(moduleName);
-
-    // Ajout des informations sur le module à l'array
-    modulesInfo.push({
-      name: module.name,
-      title: moduleTitle,
-      currentVersion,
-      recommendedVersion,
-      recommendedReleaseDate,
-      latestVersion,
-      latestReleaseDate,
-    });
+async function getCompatibleVersion(moduleName, coreVersion) {
+    try {
+      console.log(`Fetching compatible version for ${moduleName} with core version ${coreVersion}`);
+      const url = `https://updates.drupal.org/release-history/${moduleName}/all`;
+      const response = await axios.get(url);
+      const parser = new xml2js.Parser();
+      const result = await parser.parseStringPromise(response.data);
+  
+      if (!result.project || !result.project.releases || !result.project.releases[0].release) {
+        throw new Error('Invalid API response structure');
+      }
+  
+      const releases = result.project.releases[0].release;
+      console.log(`Releases for ${moduleName}:`, releases);
+  
+      const compatibleRelease = releases.find(release => {
+        const coreCompatibility = release.core_compatibility ? release.core_compatibility[0] : '';
+        return coreCompatibility.includes(coreVersion) || coreCompatibility.includes(`^${coreVersion.split('.')[0]}`);
+      });
+  
+      if (compatibleRelease) {
+        const recommendedVersion = compatibleRelease.version[0];
+        const recommendedReleaseDate = formatDate(compatibleRelease.date[0]);
+        return { recommendedVersion, recommendedReleaseDate };
+      } else {
+        console.warn(`No compatible version found for ${moduleName} with core version ${coreVersion}`);
+        return { recommendedVersion: 'N/A', recommendedReleaseDate: 'N/A' };
+      }
+    } catch (error) {
+      console.error(`Error fetching compatible version for ${moduleName}: ${error.message}`);
+      return { recommendedVersion: 'N/A', recommendedReleaseDate: 'N/A' };
+    }
   }
-
-  // Générer le code HTML et l'enregistrer dans un fichier
-  const html = generateHtmlTable(modulesInfo);
-  fs.writeFileSync('modules_info.html', html);
-  console.log('HTML file created: modules_info.html');
-}
-
-main();
+  
+  async function main() {
+    console.log('Starting script...');
+    const composerLock = JSON.parse(fs.readFileSync('prod/composer.lock', 'utf8'));
+    const modules = composerLock.packages.filter(pkg => pkg.name.startsWith('drupal/') && pkg.type === 'drupal-module');
+    const modulesInfo = [];
+  
+    for (const module of modules) {
+      const moduleName = extractModuleNameFromHomepage(module.homepage);
+  
+      const currentVersion = module.dist?.reference || module.source?.reference || module.version || 'N/A';
+      const { recommendedVersion, recommendedReleaseDate } = await getCompatibleVersion(moduleName, '10.2.4');
+      const { latestVersion, latestReleaseDate } = await getLatestVersionInfo(moduleName);
+      const moduleTitle = await getModuleTitle(moduleName);
+  
+      // Ajout des informations sur le module à l'array
+      modulesInfo.push({
+        name: module.name,
+        title: moduleTitle,
+        currentVersion,
+        recommendedVersion,
+        recommendedReleaseDate,
+        latestVersion,
+        latestReleaseDate,
+      });
+  
+      console.log(`Processed module: ${module.name}`);
+    }
+  
+    // Générer le code HTML et l'enregistrer dans un fichier
+    const html = generateHtmlTable(modulesInfo);
+    fs.writeFileSync('modules_info.html', html);
+    console.log('HTML file created: modules_info.html');
+  }
+  
+  main();
