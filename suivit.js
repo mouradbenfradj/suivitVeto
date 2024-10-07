@@ -55,6 +55,20 @@ async function getLatestVersionInfo(moduleName) {
   }
 }
 
+async function getModuleTitle(moduleName) {
+  try {
+    const url = `https://updates.drupal.org/release-history/${moduleName}/all`;
+    const response = await axios.get(url);
+    const parser = new xml2js.Parser();
+    const result = await parser.parseStringPromise(response.data);
+    const title = result.project.title[0];
+    return title;
+  } catch (error) {
+    console.error(`Error fetching title for ${moduleName}: ${error}`);
+    return 'N/A';
+  }
+}
+
 async function main() {
   const composerLock = JSON.parse(fs.readFileSync('composer.lock', 'utf8'));
   const modules = composerLock.packages.filter(pkg => pkg.name.startsWith('drupal/') && pkg.type === 'drupal-module');
@@ -65,8 +79,10 @@ async function main() {
     const recommendedVersion = module.dist?.reference || module.source?.reference || 'N/A';
     const recommendedReleaseDate = await getReleaseDate(moduleName, recommendedVersion);
     const { latestVersion, latestReleaseDate } = await getLatestVersionInfo(moduleName);
+    const moduleTitle = await getModuleTitle(moduleName);
 
     console.log(`Module: ${module.name}`);
+    console.log(`Title: ${moduleTitle}`);
     console.log(`Current Version: ${currentVersion}`);
     console.log(`Recommended Version: ${recommendedVersion}`);
     console.log(`Recommended Version Release Date: ${recommendedReleaseDate}`);
