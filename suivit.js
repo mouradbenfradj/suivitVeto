@@ -69,27 +69,93 @@ async function getModuleTitle(moduleName) {
   }
 }
 
+function generateHtmlTable(modulesInfo) {
+  let html = `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Drupal Modules Info</title>
+      <style>
+          table {
+              width: 100%;
+              border-collapse: collapse;
+          }
+          th, td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: left;
+          }
+          th {
+              background-color: #f2f2f2;
+          }
+      </style>
+  </head>
+  <body>
+      <h1>Drupal Modules Information</h1>
+      <table>
+          <tr>
+              <th>Module Name</th>
+              <th>Title</th>
+              <th>Current Version</th>
+              <th>Recommended Version</th>
+              <th>Recommended Version Release Date</th>
+              <th>Latest Version</th>
+              <th>Latest Version Release Date</th>
+          </tr>`;
+
+  modulesInfo.forEach(module => {
+    html += `
+          <tr>
+              <td>${module.name}</td>
+              <td>${module.title}</td>
+              <td>${module.currentVersion}</td>
+              <td>${module.recommendedVersion}</td>
+              <td>${module.recommendedReleaseDate}</td>
+              <td>${module.latestVersion}</td>
+              <td>${module.latestReleaseDate}</td>
+          </tr>`;
+  });
+
+  html += `
+      </table>
+  </body>
+  </html>`;
+
+  return html;
+}
+
 async function main() {
-  const composerLock = JSON.parse(fs.readFileSync('composer.lock', 'utf8'));
+  const composerLock = JSON.parse(fs.readFileSync('prod/composer.lock', 'utf8'));
   const modules = composerLock.packages.filter(pkg => pkg.name.startsWith('drupal/') && pkg.type === 'drupal-module');
+  const modulesInfo = [];
 
   for (const module of modules) {
     const moduleName = extractModuleNameFromHomepage(module.homepage);
-    const currentVersion = module.version || 'N/A';
+
+    const currentVersion = module.dist?.reference || module.source?.reference || module.version || 'N/A';
     const recommendedVersion = module.dist?.reference || module.source?.reference || 'N/A';
     const recommendedReleaseDate = await getReleaseDate(moduleName, recommendedVersion);
     const { latestVersion, latestReleaseDate } = await getLatestVersionInfo(moduleName);
     const moduleTitle = await getModuleTitle(moduleName);
 
-    console.log(`Module: ${module.name}`);
-    console.log(`Title: ${moduleTitle}`);
-    console.log(`Current Version: ${currentVersion}`);
-    console.log(`Recommended Version: ${recommendedVersion}`);
-    console.log(`Recommended Version Release Date: ${recommendedReleaseDate}`);
-    console.log(`Latest Version: ${latestVersion}`);
-    console.log(`Latest Version Release Date: ${latestReleaseDate}`);
-    console.log('-----------------------------');
+    // Ajout des informations sur le module à l'array
+    modulesInfo.push({
+      name: module.name,
+      title: moduleTitle,
+      currentVersion,
+      recommendedVersion,
+      recommendedReleaseDate,
+      latestVersion,
+      latestReleaseDate,
+    });
   }
+
+  // Générer le code HTML et l'enregistrer dans un fichier
+  const html = generateHtmlTable(modulesInfo);
+  fs.writeFileSync('modules_info.html', html);
+  console.log('HTML file created: modules_info.html');
 }
 
 main();
