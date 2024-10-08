@@ -1,0 +1,10 @@
+prod/core  
+prod/libraries  
+prod/modules  
+prod/themes  
+prod/vendor
+preprod/core  
+preprod/libraries  
+preprod/modules  
+preprod/themes  
+preprod/vendor
