@@ -8,3 +8,4 @@ preprod/libraries
 preprod/modules  
 preprod/themes  
 preprod/vendor
+/node_modules/
